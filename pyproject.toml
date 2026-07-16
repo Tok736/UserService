@@ -1,0 +1,63 @@
+[project]
+name = "userservice"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "Eugene Tokarev",email = "to_ev@mail.ru"}
+]
+readme = "README.md"
+requires-python = ">=3.12,<4.0"
+dependencies = [
+    "asyncpg (>=0.31.0,<0.32.0)",
+    "sqlalchemy (>=2.0.51,<3.0.0)",
+    "pydantic-settings (>=2.14.2,<3.0.0)",
+    "faststream[cli,rabbit] (>=0.7.2,<0.8.0)",
+    "alembic (>=1.18.5,<2.0.0)",
+    "psycopg2-binary (>=2.9.12,<3.0.0)",
+    "pyjwt[crypto] (>=2.13.0,<3.0.0)"
+]
+
+[dependency-groups]
+dev = [
+    "ruff (>=0.15.21,<0.16.0)"
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+
+[tool.ruff]
+line-length = 120
+exclude = [
+    ".git",
+    ".git-rewrite",
+    ".ruff_cache",
+    ".venv",
+]
+
+[tool.ruff.lint]
+preview = true
+select = [
+    "E",     # pycodestyle errors
+    "W",     # pycodestyle warnings
+    "F",     # pyflakes
+    "I",     # isort
+    "B",     # flake8-bugbear
+    "C4",    # flake8-comprehensions
+    "UP",    # pyupgrade
+]
+ignore = [
+    "E501",  # line too long, handled by black
+    "B008",  # do not perform function calls in argument defaults
+    "C901",  # too complex
+    "W191",  # indentation contains tabs
+    "E221",
+    "E271",
+    "UP047",
+    "UP046",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["E402", "F401", "F403"]

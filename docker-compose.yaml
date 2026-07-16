@@ -1,0 +1,19 @@
+networks:
+  NETWORK:
+    external: true
+
+services:
+  user_service:
+    build: ./
+    restart: always
+    networks:
+      - NETWORK
+    volumes:
+      - /edcurve/webconf/:/edcurve/webconf/
+    ports:
+      - "8000:8000"
+    logging:
+        options:
+            max-size: '10m'
+            max-file: '3'
+        driver: json-file

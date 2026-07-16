@@ -1,0 +1,48 @@
+{
+    "project": {
+        "name": "UserService",
+        "workers": 4,
+        "minor_age": 18,
+        "invitation_ttl": 604800,
+        "link_managed_by_contact": true,
+        "default_page_limit": 50,
+        "max_page_limit": 200,
+        "metrics_interval": 30
+    },
+    "server": {
+        "host": "0.0.0.0",
+        "port": 8000,
+        "root_path": "",
+        "docs": true,
+        "correlation_key": "X-Correlation-Id"
+    },
+    "sql": {
+        "database": "edcurve_users",
+        "pool_size": 10,
+        "max_overflow": 20,
+        "echo": false
+    },
+    "rabbit": {
+        "events_exchange": "edcurve.events",
+        "commands_exchange": "edcurve.commands",
+        "message_ttl": 3600000,
+        "outbox_batch_size": 100,
+        "outbox_poll_interval": 1.0,
+        "outbox_max_attempts": 10,
+        "outbox_retry_delay": 5
+    },
+    "security": {
+        "jwt_public_key_path": "/edcurve/secrets/auth/jwt_public.pem",
+        "jwt_algorithm": "RS256",
+        "jwt_audience": "edcurve",
+        "jwt_issuer": "edcurve-auth",
+        "encryption_key_path": "/edcurve/secrets/user_service/field_encryption.key",
+        "blind_index_key_path": "/edcurve/secrets/user_service/blind_index.key",
+        "rate_limit_requests": 120,
+        "rate_limit_window": 60
+    },
+    "log": {
+        "level": "DEBUG",
+        "console_output": true
+    }
+}
