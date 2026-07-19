@@ -1,4 +1,6 @@
 class AppException(Exception):
+    """Базовое доменное исключение приложения"""
+
     status: int = 400
     message: str = "Bad Request"
 
@@ -13,3 +15,28 @@ class AppException(Exception):
 class InvalidToken(AppException):
     status = 401
     message = "Invalid or expired token"
+
+
+class NotFound(AppException):
+    status = 404
+    message = "Not found"
+
+
+class AccessDenied(AppException):
+    status = 403
+    message = "Access denied"
+
+
+class ValidationError(AppException):
+    status = 422
+    message = "Validation error"
+
+
+class Conflict(AppException):
+    status = 409
+    message = "Conflict"
+
+
+class VersionConflict(AppException):
+    status = 409
+    message = "Version conflict, reload and retry"

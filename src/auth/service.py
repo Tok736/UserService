@@ -1,36 +1,20 @@
-from __future__ import annotations
-
+from functools import lru_cache
 from typing import Any
 
 import jwt
 from jwt import PyJWK
 from jwt.exceptions import InvalidTokenError, PyJWKError
-from pydantic import BaseModel
 
 from src.exceptions import InvalidToken
+from src.logger import logger
 
-ALLOWED_ALGORITHMS = frozenset({"RS256", "RS384", "RS512", "PS256", "PS384", "PS512"})
-
-
-# fmt: off
-class JWK(BaseModel):
-    kty:             str = "RSA"
-    use:             str = "sig"
-    alg:             str
-    kid:             str
-    n:               str
-    e:               str
+from .constants import ALLOWED_ALGORITHMS
+from .schemas import JWKS
 
 
-class JWKS(BaseModel):
-    keys:            list[JWK]
-# fmt: on
-
-
-class JWTValidator:
+class TokenService:
     def __init__(
         self,
-        jwks: JWKS,
         *,
         issuer: str | None = None,
         audience: str | None = None,
@@ -42,10 +26,9 @@ class JWTValidator:
         self.leeway = leeway
         self.require = list(require)
         self.keys: dict[str, tuple[PyJWK, str]] = {}
-        self.refresh(jwks)
 
     def refresh(self, jwks: JWKS) -> None:
-        """Перестроить набор ключей (ротация ключей в AuthService)."""
+        """Перестроить набор ключей"""
         keys: dict[str, tuple[PyJWK, str]] = {}
         for key in jwks.keys:
             if key.use != "sig":
@@ -60,6 +43,7 @@ class JWTValidator:
         if not keys:
             raise ValueError("JWKS не содержит подходящих ключей для проверки подписи")
         self.keys = keys
+        logger.info("[TokenService] JWKS are refreshed successfully")
 
     def decode(self, token: str) -> dict[str, Any]:
         try:
@@ -97,3 +81,9 @@ class JWTValidator:
             raise InvalidToken(str(e)) from e
 
     __call__ = decode
+
+
+@lru_cache
+def get_token_service() -> TokenService:
+    """Singleton TokenService: грузит публичный ключ один раз"""
+    return TokenService()

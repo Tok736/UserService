@@ -119,7 +119,7 @@ class RabbitRPCManager:
 
     async def call(
         self,
-        request: BaseModel,
+        request: BaseModel | str,
         queue: str,
         response_schema: type[T_response],
         *,
@@ -137,7 +137,7 @@ class RabbitRPCManager:
         try:
             logger.debug(f"[RabbitRPCManager] -> '{queue}' (cid={correlation_id})")
             await self.broker.publish(
-                request.model_dump(),
+                request.model_dump() if isinstance(request, BaseModel) else request,
                 queue,
                 correlation_id=correlation_id,
                 reply_to=callback_queue.name,
@@ -159,7 +159,7 @@ manager = RabbitRPCManager(broker)
 
 
 async def rpc_call(
-    request: BaseModel,
+    request: BaseModel | str,
     queue: str,
     response_schema: type[T_response],
     *,

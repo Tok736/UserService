@@ -5,6 +5,7 @@ from pydantic import BaseModel
 from pydantic_settings import BaseSettings
 
 from src.logger import logger
+from src.scripts.create_config import fill_from
 
 
 # fmt: off
@@ -42,6 +43,9 @@ class LogSettings(BaseModel):
     exceptions:                bool
 
 
+class InvitationSettings(BaseModel):
+    token_ttl_hours:           int
+
 # fmt: on
 
 
@@ -53,6 +57,7 @@ class Settings(BaseSettings):
     sql:            SQLSettings
     rabbit:         RabbitSettings
     log:            LogSettings
+    invitation:     InvitationSettings
     # fmt: on
 
     def load_config_file(self) -> list[str]:
@@ -85,68 +90,6 @@ class Settings(BaseSettings):
         self._web_config_path = web_config_path
 
     @staticmethod
-    def fill_from(target_config: dict[str, Any], source_config: dict[str, Any]) -> None:
-        """
-        Обновляет поля конфига:
-        - Если в дефолт конфиге появились новые поля, то они добавляются в конфиг
-        - Если в конфиге есть поля, которых нет в дефолт конфиге, то они удаляются из конфига
-        - Если поменялся тип поля, то сначала происходит попытка преобразовать
-        к новому типу, при неудаче ставится значение из дефолт конфига
-        - Если отличается только значение поля, то оно не меняется
-        """
-
-        if not isinstance(target_config, dict) or not isinstance(source_config, dict):
-            raise ValueError("First layer in structure of config.json and config-default.json must be dict like")
-
-        stack: list[tuple[dict[str, Any], dict[str, Any]]] = [(target_config, source_config)]
-
-        while len(stack) > 0:
-            target, source = stack.pop()
-
-            for key in list(target.keys()):
-                if key not in source:
-                    logger.warning(f"[Settings] Field '{key}' must not be in config.json")
-                    del target[key]
-
-            for key in source:
-                if key not in target:
-                    logger.warning(f"[Settings] Field '{key}' is missing in config.json")
-                    target[key] = source[key]
-
-            temp_dict = {key: target[key] for key in source}
-
-            target.clear()
-            target.update(temp_dict)
-            types = (str, int, float, bool)
-
-            for key in target:
-                if isinstance(target[key], dict) and isinstance(source[key], dict):
-                    stack.append((target[key], source[key]))
-
-                elif isinstance(target[key], list) and isinstance(source[key], list):
-                    pass
-
-                elif target[key] is None or source[key] is None:
-                    pass
-
-                elif type(target[key]) is not type(source[key]) and all(
-                    t in types for t in (type(target[key]), type(source[key]))
-                ):
-                    try:
-                        target[key] = type(source[key])(target[key])
-                        logger.warning(f"[Settings] Type of field '{key}' successfully converted")
-                    except ValueError:
-                        target[key] = source[key]
-                        logger.warning(f"[Settings] Type of field '{key}' is not right")
-
-                elif type(target[key]) is type(source[key]):
-                    pass
-
-                else:
-                    target[key] = source[key]
-                    logger.warning(f"[Settings] Value {source[key]} is set on field '{key}'")
-
-    @staticmethod
     def fill_from_web_config(config: dict[str, Any], web_config: dict[str, Any]) -> None:
         """Заполняет данные из главного веб конфига"""
 
@@ -170,14 +113,10 @@ class Settings(BaseSettings):
         try:
             with open(config_path, encoding="utf-8") as f:
                 config = json.load(f)
-            Settings.fill_from(config, default_config)
-        except FileNotFoundError:
-            logger.warning(f"[Settings] There is no config file on {config_path}")
-            logger.info(f"[Settings] Create a config file with such structure:\n{json.dumps(default_config, indent=4)}")
-            config = default_config
+            fill_from(config, default_config)
         except Exception as e:
-            logger.warning(f"[Settings] Error opening {config_path}. {e}. Will use data from default config")
-            config = default_config
+            logger.warning(f"[Settings] Error opening {config_path}. {e}")
+            raise ValueError(f"Error opening {config_path}. {e}") from e
 
         with open(web_config_path, encoding="utf-8") as f:
             web_config = json.load(f)
