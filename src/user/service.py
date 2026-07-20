@@ -43,6 +43,7 @@ class UserService:
                 user_id=user.user_id,
                 basic_role=user.basic_role,
                 account_status=user.account_status,
+                email=user.email,
                 first_name=user.first_name,
                 last_name=user.last_name,
                 middle_name=user.middle_name,
@@ -60,7 +61,7 @@ class UserService:
             logger.warning(f"[UserService] Error creating user. {e}")
             if settings.log.exceptions:
                 logger.exception(e)
-            return err(status=500, message="Error creating user")
+            return err(status=500, message="User creation failed")
 
     async def current_user(self, access_token: str) -> User:
         """Достаёт вызывающего из JWT и его профиль в UserService"""
