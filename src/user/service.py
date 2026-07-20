@@ -1,7 +1,8 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.auth.service import TokenService
-from src.exceptions import AccessDenied, AppException, NotFound, VersionConflict
+from src.config import settings
+from src.exceptions import AccessDenied, NotFound, VersionConflict
 from src.invitation.repository import InvitationRepository
 from src.logger import logger
 from src.rabbit import Response, err
@@ -14,6 +15,7 @@ from .schemas import (
     ReadProfileRequest,
     ReadRelatedProfileRequest,
     UpdateProfileRequest,
+    UserCreate,
     UserRead,
 )
 from .utils import anonymized_profile_values
@@ -35,9 +37,34 @@ class UserService:
         self.invitations = invitations
         self.tokens = tokens
 
-    async def current_user(self, token: str) -> User:
+    async def create_user(self, user: UserCreate) -> Response:
+        try:
+            await self.users.create(
+                user_id=user.user_id,
+                basic_role=user.basic_role,
+                account_status=user.account_status,
+                first_name=user.first_name,
+                last_name=user.last_name,
+                middle_name=user.middle_name,
+                nickname=user.nickname,
+                date_of_birth=user.date_of_birth,
+                contacts=user.contacts,
+                messengers=user.messengers,
+                timezone=user.timezone,
+                locale=user.locale,
+                bio=user.bio,
+            )
+
+            return Response(status=201, message="User created")
+        except Exception as e:
+            logger.warning(f"[UserService] Error creating user. {e}")
+            if settings.log.exceptions:
+                logger.exception(e)
+            return err(status=500, message="Error creating user")
+
+    async def current_user(self, access_token: str) -> User:
         """Достаёт вызывающего из JWT и его профиль в UserService"""
-        claims = self.tokens.decode(token)
+        claims = self.tokens.decode(access_token)
         user = await self.users.get_by_user_id(claims.user_id)
         if user is None:
             logger.debug(f"[UserService] No profile for caller {claims.user_id}")
@@ -46,54 +73,42 @@ class UserService:
 
     async def read_own_profile(self, request: ReadProfileRequest) -> Response[UserRead]:
         """Прочитать свой профиль"""
-        try:
-            user = await self.current_user(request.access_token)
-        except AppException as exc:
-            return err(exc.status, exc.message)
+        user = await self.current_user(request.access_token)
         return Response(data=UserRead.model_validate(user))
 
     async def read_related_profile(self, request: ReadRelatedProfileRequest) -> Response[UserRead]:
         """Прочитать профиль связанного человека с проверкой связи"""
-        try:
-            caller = await self.current_user(request.access_token)
-            if request.target_user_row == caller.id:
-                target = caller
-            else:
-                if not await self.relations.exists_link(caller.id, request.target_user_row):
-                    logger.debug(f"[UserService] Caller {caller.id} has no link to {request.target_user_row}")
-                    raise AccessDenied()
-                target = await self.users.get_by_id(request.target_user_row)
-                if target is None:
-                    raise NotFound("Target profile not found")
-        except AppException as exc:
-            return err(exc.status, exc.message)
+        caller = await self.current_user(request.access_token)
+        if request.target_user_row == caller.id:
+            target = caller
+        else:
+            if not await self.relations.exists_link(caller.id, request.target_user_row):
+                logger.debug(f"[UserService] Caller {caller.id} has no link to {request.target_user_row}")
+                raise AccessDenied()
+            target = await self.users.get_by_id(request.target_user_row)
+            if target is None:
+                raise NotFound("Target profile not found")
         return Response(data=UserRead.model_validate(target))
 
     async def update_own_profile(self, request: UpdateProfileRequest) -> Response[UserRead]:
         """Обновить свой профиль (оптимистичная блокировка)"""
-        try:
-            caller = await self.current_user(request.access_token)
-            values = self._build_profile_values(request)
-            if not values:
-                return Response(data=UserRead.model_validate(caller))
-            updated = await self.users.update(id=caller.id, version=request.version, values=values)
-            if updated is None:
-                logger.debug(f"[UserService] Version conflict updating profile {caller.id}")
-                raise VersionConflict()
-        except AppException as exc:
-            return err(exc.status, exc.message)
+        caller = await self.current_user(request.access_token)
+        values = self._build_profile_values(request)
+        if not values:
+            return Response(data=UserRead.model_validate(caller))
+        updated = await self.users.update(id=caller.id, version=request.version, values=values)
+        if updated is None:
+            logger.debug(f"[UserService] Version conflict updating profile {caller.id}")
+            raise VersionConflict()
 
         return Response(data=UserRead.model_validate(updated))
 
     async def delete_own_profile(self, request: DeleteProfileRequest) -> Response[UserRead]:
         """Удалить свой профиль: soft delete + анонимизация"""
-        try:
-            user = await self.current_user(request.access_token)
-            updated = await self.users.soft_delete_by_id(id=user.id, anonymized=anonymized_profile_values())
-            if updated is None:
-                raise NotFound("Profile not found")
-        except AppException as exc:
-            return err(exc.status, exc.message)
+        user = await self.current_user(request.access_token)
+        updated = await self.users.soft_delete_by_id(id=user.id, anonymized=anonymized_profile_values())
+        if updated is None:
+            raise NotFound("Profile not found")
 
         return Response(message="Profile deleted", data=UserRead.model_validate(updated))
 
@@ -103,7 +118,7 @@ class UserService:
             User.first_name: request.first_name,
             User.last_name: request.last_name,
             User.middle_name: request.middle_name,
-            User.display_name: request.display_name,
+            User.nickname: request.nickname,
             User.avatar_url: request.avatar_url,
             User.date_of_birth: request.date_of_birth,
             User.contacts: request.contacts,

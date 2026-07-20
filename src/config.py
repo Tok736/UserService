@@ -66,7 +66,7 @@ class Settings(BaseSettings):
         Возвращает имена полей, которые были обновлены.
         """
 
-        new_config = Settings.from_files(self._config_path, self._web_config_path)
+        new_config = settings_from_files(self._config_path, self._web_config_path)
 
         stack: list[tuple[BaseModel, BaseModel]] = [(self, new_config)]
         updated_fields = []
@@ -103,33 +103,33 @@ class Settings(BaseSettings):
         config["rabbit"]["host"] = web_config["rabbit_mq"]["server"]
         config["rabbit"]["port"] = web_config["rabbit_mq"]["port"]
 
-    @staticmethod
-    def from_files(config_path: str, web_config_path: str) -> "Settings":
-        """Загружает конфиг из конфиг файла"""
 
-        with open("config.json", encoding="utf-8") as f:
-            default_config = json.load(f)
+def settings_from_files(config_path: str, web_config_path: str) -> Settings:
+    """Загружает конфиг из конфиг файла"""
 
-        try:
-            with open(config_path, encoding="utf-8") as f:
-                config = json.load(f)
-            fill_from(config, default_config)
-        except Exception as e:
-            logger.warning(f"[Settings] Error opening {config_path}. {e}")
-            raise ValueError(f"Error opening {config_path}. {e}") from e
+    with open("config.json", encoding="utf-8") as f:
+        default_config = json.load(f)
 
-        with open(web_config_path, encoding="utf-8") as f:
-            web_config = json.load(f)
+    try:
+        with open(config_path, encoding="utf-8") as f:
+            config = json.load(f)
+        fill_from(config, default_config)
+    except Exception as e:
+        logger.warning(f"[Settings] Error opening {config_path}. {e}")
+        raise ValueError(f"Error opening {config_path}. {e}") from e
 
-        Settings.fill_from_web_config(config, web_config)
+    with open(web_config_path, encoding="utf-8") as f:
+        web_config = json.load(f)
 
-        settings = Settings.model_validate(config)
-        settings.set_config_paths(config_path, web_config_path)
+    Settings.fill_from_web_config(config, web_config)
 
-        return settings
+    settings = Settings.model_validate(config)
+    settings.set_config_paths(config_path, web_config_path)
+
+    return settings
 
 
-settings = Settings.from_files(
+settings = settings_from_files(
     config_path="/edcurve/webconf/user_service/config.json",
     web_config_path="/edcurve/webconf/config.json",
 )

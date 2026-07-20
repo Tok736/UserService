@@ -1,5 +1,4 @@
 from functools import lru_cache
-from typing import Any
 
 import jwt
 from jwt import PyJWK
@@ -9,7 +8,7 @@ from src.exceptions import InvalidToken
 from src.logger import logger
 
 from .constants import ALLOWED_ALGORITHMS
-from .schemas import JWKS
+from .schemas import JWKS, JWTPayload
 
 
 class TokenService:
@@ -45,7 +44,7 @@ class TokenService:
         self.keys = keys
         logger.info("[TokenService] JWKS are refreshed successfully")
 
-    def decode(self, token: str) -> dict[str, Any]:
+    def decode(self, token: str) -> JWTPayload:
         try:
             header = jwt.get_unverified_header(token)
         except InvalidTokenError as e:
@@ -64,7 +63,7 @@ class TokenService:
             raise InvalidToken(f"alg в токене ({header.get('alg')}) не совпадает с alg ключа ({alg})")
 
         try:
-            return jwt.decode(
+            raw_data = jwt.decode(
                 token,
                 key=jwk.key,
                 algorithms=[alg],
@@ -77,7 +76,12 @@ class TokenService:
                     "verify_iss": self.issuer is not None,
                 },
             )
+
+            return JWTPayload.model_validate(raw_data)
         except InvalidTokenError as e:
+            raise InvalidToken(str(e)) from e
+        except Exception as e:
+            logger.warning(f"[TokenService] Unexpected error: {e}")
             raise InvalidToken(str(e)) from e
 
     __call__ = decode

@@ -2,11 +2,12 @@ import asyncio
 from typing import Any, Generic, NamedTuple, TypeVar
 from uuid import uuid4
 
-from faststream import FastStream
+from faststream import ExceptionMiddleware, FastStream
 from faststream.rabbit import RabbitBroker, RabbitMessage, RabbitQueue
 from pydantic import BaseModel
 
 from src.config import settings
+from src.exceptions import AppException
 from src.logger import logger
 
 broker = RabbitBroker(settings.rabbit.rabbit_url, logger=logger)
@@ -14,7 +15,7 @@ app = FastStream(broker)
 
 
 def create_queue(prefix: str, method: str, path: str) -> RabbitQueue:
-    name = f"{prefix}.{method}.{path}"
+    name = f"{method}-{prefix}/{path}"
     logger.info(f"[create_queue] Creating queue with name {name}")
     return RabbitQueue(
         name=name,
@@ -26,7 +27,7 @@ def create_queue(prefix: str, method: str, path: str) -> RabbitQueue:
 class queue:
     """Класс для создания RestAPI-подобных очередей"""
 
-    prefix = "auth_consumer"
+    prefix = "user_service"
 
     @staticmethod
     def get(path: str) -> RabbitQueue:
@@ -194,3 +195,24 @@ class Response(BaseModel, Generic[T]):
 
 def err(status: int, message: str) -> Response:
     return Response(status=status, message=message, data=None)
+
+
+exception_middleware = ExceptionMiddleware()
+
+
+@exception_middleware.add_handler(AppException, publish=True)
+async def handle_app_exception(e: AppException) -> Response:
+    """Хендлер для отлова AppException, которые пробрасываются при вызовах функций"""
+    return err(e.status, e.message)
+
+
+@exception_middleware.add_handler(Exception, publish=True)
+async def handle_unexpected(e: Exception) -> Response:
+    """Хендлер для отлова неожиданных ошибок"""
+    logger.warning(f"[handle_unexpected] Unexpected error. {e}")
+    if settings.log.exceptions:
+        logger.exception(e)
+    return err(500, "Internal Server Error")
+
+
+broker.add_middleware(exception_middleware)

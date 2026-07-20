@@ -1,3 +1,5 @@
+name: edcurve
+
 networks:
   NETWORK:
     external: true

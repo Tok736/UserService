@@ -8,6 +8,7 @@ from src.user.schemas import (
     ReadProfileRequest,
     ReadRelatedProfileRequest,
     UpdateProfileRequest,
+    UserCreate,
     UserRead,
 )
 from src.user.service import UserService
@@ -15,9 +16,7 @@ from src.user.service import UserService
 router = RabbitRouter()
 
 
-# --- CRUD профиля (request/reply RPC от фронта) ---
-
-
+# --- Frontend эндпоинты ---
 @router.subscriber(queue.get("profile/me"))
 async def read_own_profile(
     request: ReadProfileRequest, service: UserService = Depends(get_user_service)
@@ -44,3 +43,9 @@ async def delete_own_profile(
     request: DeleteProfileRequest, service: UserService = Depends(get_user_service)
 ) -> Response[UserRead]:
     return await service.delete_own_profile(request)
+
+
+# --- Backend эндпоинты ---
+@router.subscriber(queue.post("user"))
+async def create_user(user: UserCreate, service: UserService = Depends(get_user_service)) -> Response:
+    return await service.create_user(user)

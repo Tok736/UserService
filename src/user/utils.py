@@ -4,7 +4,7 @@ def anonymized_profile_values() -> dict[str, None | str]:
         "first_name": None,
         "last_name": None,
         "middle_name": None,
-        "display_name": "deleted user",
+        "nickname": "deleted user",
         "avatar_url": None,
         "date_of_birth": None,
         "contacts": None,
