@@ -7,6 +7,7 @@ from src.auth.schemas import JWKS
 from src.auth.service import get_token_service
 from src.logger import logger
 from src.rabbit import Response, broker, rpc_call
+from src.relation.router import router as relation_router
 from src.user.router import router as user_router
 
 
@@ -28,5 +29,6 @@ async def lifespan() -> AsyncIterator[None]:
 
 
 broker.include_router(user_router)
+broker.include_router(relation_router)
 
 app = FastStream(broker, lifespan=lifespan)

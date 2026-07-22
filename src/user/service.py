@@ -76,13 +76,11 @@ class UserService:
             raise NotFound("Profile not found")
         return user
 
-    async def read_own_profile(self, request: ReadProfileRequest) -> Response[UserRead]:
-        """Прочитать свой профиль"""
+    async def read_me(self, request: ReadProfileRequest) -> Response[UserRead]:
         user = await self.current_user(request.access_token)
         return Response(data=UserRead.model_validate(user))
 
     async def read_related_profile(self, request: ReadRelatedProfileRequest) -> Response[UserRead]:
-        """Прочитать профиль связанного человека с проверкой связи"""
         caller = await self.current_user(request.access_token)
         if request.target_user_row == caller.id:
             target = caller
@@ -95,8 +93,7 @@ class UserService:
                 raise NotFound("Target profile not found")
         return Response(data=UserRead.model_validate(target))
 
-    async def update_own_profile(self, request: UpdateProfileRequest) -> Response[UserRead]:
-        """Обновить свой профиль (оптимистичная блокировка)"""
+    async def update_me(self, request: UpdateProfileRequest) -> Response[UserRead]:
         caller = await self.current_user(request.access_token)
         values = self._build_profile_values(request)
         if not values:
@@ -108,8 +105,7 @@ class UserService:
 
         return Response(data=UserRead.model_validate(updated))
 
-    async def delete_own_profile(self, request: DeleteProfileRequest, correlation_id: str) -> Response[UserRead]:
-        """Удалить свой профиль: soft delete + анонимизация"""
+    async def delete_me(self, request: DeleteProfileRequest, correlation_id: str) -> Response[UserRead]:
         user = await self.current_user(request.access_token)
         if user.account_status == AccountStatus.deleted:
             raise AlreadyDeleted("User already deleted")
