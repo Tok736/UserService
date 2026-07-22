@@ -59,23 +59,23 @@ class ReadRelatedProfileRequest(BaseModel):
 
 
 class UpdateProfileRequest(BaseModel):
-    access_token:    str
-    version:         int
-    first_name:      str | None       = Field(default=None, max_length=100)
-    last_name:       str | None       = Field(default=None, max_length=100)
-    middle_name:     str | None       = Field(default=None, max_length=100)
-    nickname:        str | None       = Field(default=None, max_length=200)
-    avatar_url:      str | None       = Field(default=None, max_length=512)
-    date_of_birth:   date | None      = None
-    contacts:        dict | None      = None
-    messengers:      dict | None      = None
-    timezone:        str | None       = Field(default=None, max_length=64)
-    locale:          str | None       = Field(default=None, max_length=16)
-    bio:             str | None       = None
-    basic_role:      BasicRole | None = None
+    access_token:          str
+    version:               int
+    first_name:            str | None       = Field(default=None, max_length=100)
+    last_name:             str | None       = Field(default=None, max_length=100)
+    middle_name:           str | None       = Field(default=None, max_length=100)
+    nickname:              str | None       = Field(default=None, max_length=200)
+    avatar_url:            str | None       = Field(default=None, max_length=512)
+    date_of_birth:         date | None      = None
+    contacts:              dict | None      = None
+    messengers:            dict | None      = None
+    timezone:              str | None       = Field(default=None, max_length=64)
+    locale:                str | None       = Field(default=None, max_length=16)
+    bio:                   str | None       = None
+    basic_role:            BasicRole | None = None
 
 
 class DeleteProfileRequest(BaseModel):
-    access_token: str
+    access_token:          str
 
 # fmt: on

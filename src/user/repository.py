@@ -134,7 +134,7 @@ class UserRepository(BaseRepository):
         await self.session.commit()
         return user
 
-    async def soft_delete_by_id(self, *, id: int, anonymized: dict) -> User | None:
+    async def soft_delete_by_id(self, *, id: int, anonymized: dict, commit: bool = True) -> User | None:
         """Soft delete + анонимизация ПД по внутреннему id"""
         values = {
             **anonymized,
@@ -144,5 +144,6 @@ class UserRepository(BaseRepository):
         }
         statement = update(User).where(User.id == id).values(values).returning(User)
         user = await self.session.scalar(statement)
-        await self.session.commit()
+        if commit:
+            await self.session.commit()
         return user

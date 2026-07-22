@@ -190,6 +190,11 @@ class Response(BaseModel, Generic[T]):
     status:   int      = 200
     message:  str      = "Ok"
     data:     T | None = None
+
+    @property
+    def ok(self) -> bool:
+        return self.status < 300
+
 # fmt: on
 
 

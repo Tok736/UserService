@@ -2,7 +2,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.auth.service import TokenService
 from src.config import settings
-from src.exceptions import AccessDenied, NotFound, VersionConflict
+from src.enums import AccountStatus
+from src.exceptions import AccessDenied, AlreadyDeleted, NotFound, VersionConflict
+from src.external.auth_consumer import ExternalAuthConsumer
 from src.invitation.repository import InvitationRepository
 from src.logger import logger
 from src.rabbit import Response, err
@@ -30,12 +32,14 @@ class UserService:
         relations: UserRelationRepository,
         invitations: InvitationRepository,
         tokens: TokenService,
+        external_auth_consumer: ExternalAuthConsumer,
     ) -> None:
         self.session = session
         self.users = users
         self.relations = relations
         self.invitations = invitations
         self.tokens = tokens
+        self.external_auth_consumer = external_auth_consumer
 
     async def create_user(self, user: UserCreate) -> Response:
         try:
@@ -104,14 +108,25 @@ class UserService:
 
         return Response(data=UserRead.model_validate(updated))
 
-    async def delete_own_profile(self, request: DeleteProfileRequest) -> Response[UserRead]:
+    async def delete_own_profile(self, request: DeleteProfileRequest, correlation_id: str) -> Response[UserRead]:
         """Удалить свой профиль: soft delete + анонимизация"""
         user = await self.current_user(request.access_token)
-        updated = await self.users.soft_delete_by_id(id=user.id, anonymized=anonymized_profile_values())
+        if user.account_status == AccountStatus.deleted:
+            raise AlreadyDeleted("User already deleted")
+
+        updated = await self.users.soft_delete_by_id(id=user.id, anonymized=anonymized_profile_values(), commit=False)
         if updated is None:
             raise NotFound("Profile not found")
+        if user.user_id is None:
+            raise NotFound("User is not registered")
 
-        return Response(message="Profile deleted", data=UserRead.model_validate(updated))
+        response = await self.external_auth_consumer.soft_delete_user(user.user_id, correlation_id)
+
+        if response.ok:
+            await self.session.commit()
+            return Response(message="Profile deleted", data=UserRead.model_validate(updated))
+        else:
+            return response
 
     def _build_profile_values(self, request: UpdateProfileRequest) -> dict:
         """Собирает словарь изменяемых полей профиля (только переданные)"""

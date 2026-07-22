@@ -12,9 +12,19 @@ class AppException(Exception):
         super().__init__(self.message)
 
 
+class AuthConsumerUnavailable(AppException):
+    status = 500
+    message = "Auth service unavailable"
+
+
 class InvalidToken(AppException):
     status = 401
     message = "Invalid or expired token"
+
+
+class AlreadyDeleted(AppException):
+    status = 409
+    message = "Already deleted"
 
 
 class NotFound(AppException):

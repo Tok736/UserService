@@ -1,4 +1,4 @@
-from faststream import Depends
+from faststream import Context, Depends
 from faststream.rabbit import RabbitRouter
 
 from src.rabbit import Response, queue
@@ -40,9 +40,11 @@ async def update_own_profile(
 
 @router.subscriber(queue.delete("profile/me"))
 async def delete_own_profile(
-    request: DeleteProfileRequest, service: UserService = Depends(get_user_service)
+    request: DeleteProfileRequest,
+    service: UserService = Depends(get_user_service),
+    correlation_id: str = Context("message.correlation_id"),
 ) -> Response[UserRead]:
-    return await service.delete_own_profile(request)
+    return await service.delete_own_profile(request, correlation_id)
 
 
 # --- Backend эндпоинты ---
