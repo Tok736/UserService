@@ -1,0 +1,19 @@
+{
+    "project": {
+        "workers": 4
+    },
+    "log": {
+        "level": "INFO",
+        "console_output": false,
+        "exceptions": false
+    },
+    "sql": {
+        "database": "user_service"
+    },
+    "rabbit": {
+        "message_ttl": 600000
+    },
+    "invitation": {
+        "token_ttl_hours": 72
+    }
+}

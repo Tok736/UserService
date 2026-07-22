@@ -1,0 +1,143 @@
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from src.auth.service import TokenService
+from src.config import settings
+from src.enums import AccountStatus
+from src.exceptions import AccessDenied, AlreadyDeleted, NotFound, VersionConflict
+from src.external.auth_consumer import ExternalAuthConsumer
+from src.invitation.repository import InvitationRepository
+from src.logger import logger
+from src.rabbit import Response, err
+from src.relation.repository import UserRelationRepository
+
+from .models import User
+from .repository import UserRepository
+from .schemas import (
+    DeleteProfileRequest,
+    ReadProfileRequest,
+    ReadRelatedProfileRequest,
+    UpdateProfileRequest,
+    UserCreate,
+    UserRead,
+)
+from .utils import anonymized_profile_values
+
+
+class UserService:
+    def __init__(
+        self,
+        *,
+        session: AsyncSession,
+        users: UserRepository,
+        relations: UserRelationRepository,
+        invitations: InvitationRepository,
+        tokens: TokenService,
+        external_auth_consumer: ExternalAuthConsumer,
+    ) -> None:
+        self.session = session
+        self.users = users
+        self.relations = relations
+        self.invitations = invitations
+        self.tokens = tokens
+        self.external_auth_consumer = external_auth_consumer
+
+    async def create_user(self, user: UserCreate) -> Response:
+        try:
+            await self.users.create(
+                user_id=user.user_id,
+                basic_role=user.basic_role,
+                account_status=user.account_status,
+                email=user.email,
+                first_name=user.first_name,
+                last_name=user.last_name,
+                middle_name=user.middle_name,
+                nickname=user.nickname,
+                date_of_birth=user.date_of_birth,
+                contacts=user.contacts,
+                messengers=user.messengers,
+                timezone=user.timezone,
+                locale=user.locale,
+                bio=user.bio,
+            )
+
+            return Response(status=201, message="User created")
+        except Exception as e:
+            logger.warning(f"[UserService] Error creating user. {e}")
+            if settings.log.exceptions:
+                logger.exception(e)
+            return err(status=500, message="User creation failed")
+
+    async def current_user(self, access_token: str) -> User:
+        """Достаёт вызывающего из JWT и его профиль в UserService"""
+        claims = self.tokens.decode(access_token)
+        user = await self.users.get_by_user_id(claims.user_id)
+        if user is None:
+            logger.debug(f"[UserService] No profile for caller {claims.user_id}")
+            raise NotFound("Profile not found")
+        return user
+
+    async def read_me(self, request: ReadProfileRequest) -> Response[UserRead]:
+        user = await self.current_user(request.access_token)
+        return Response(data=UserRead.model_validate(user))
+
+    async def read_related_profile(self, request: ReadRelatedProfileRequest) -> Response[UserRead]:
+        caller = await self.current_user(request.access_token)
+        if request.target_user_row == caller.id:
+            target = caller
+        else:
+            if not await self.relations.exists_link(caller.id, request.target_user_row):
+                logger.debug(f"[UserService] Caller {caller.id} has no link to {request.target_user_row}")
+                raise AccessDenied()
+            target = await self.users.get_by_id(request.target_user_row)
+            if target is None:
+                raise NotFound("Target profile not found")
+        return Response(data=UserRead.model_validate(target))
+
+    async def update_me(self, request: UpdateProfileRequest) -> Response[UserRead]:
+        caller = await self.current_user(request.access_token)
+        values = self._build_profile_values(request)
+        if not values:
+            return Response(data=UserRead.model_validate(caller))
+        updated = await self.users.update(id=caller.id, version=request.version, values=values)
+        if updated is None:
+            logger.debug(f"[UserService] Version conflict updating profile {caller.id}")
+            raise VersionConflict()
+
+        return Response(data=UserRead.model_validate(updated))
+
+    async def delete_me(self, request: DeleteProfileRequest, correlation_id: str) -> Response[UserRead]:
+        user = await self.current_user(request.access_token)
+        if user.account_status == AccountStatus.deleted:
+            raise AlreadyDeleted("User already deleted")
+
+        updated = await self.users.soft_delete_by_id(id=user.id, anonymized=anonymized_profile_values(), commit=False)
+        if updated is None:
+            raise NotFound("Profile not found")
+        if user.user_id is None:
+            raise NotFound("User is not registered")
+
+        response = await self.external_auth_consumer.soft_delete_user(user.user_id, correlation_id)
+
+        if response.ok:
+            await self.session.commit()
+            return Response(message="Profile deleted", data=UserRead.model_validate(updated))
+        else:
+            return response
+
+    def _build_profile_values(self, request: UpdateProfileRequest) -> dict:
+        """Собирает словарь изменяемых полей профиля (только переданные)"""
+        mapping = {
+            User.first_name: request.first_name,
+            User.last_name: request.last_name,
+            User.middle_name: request.middle_name,
+            User.nickname: request.nickname,
+            User.avatar_url: request.avatar_url,
+            User.date_of_birth: request.date_of_birth,
+            User.contacts: request.contacts,
+            User.messengers: request.messengers,
+            User.timezone: request.timezone,
+            User.locale: request.locale,
+            User.bio: request.bio,
+            User.basic_role: request.basic_role,
+        }
+        return {column: value for column, value in mapping.items() if value is not None}
